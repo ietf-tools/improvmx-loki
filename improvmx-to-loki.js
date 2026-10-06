@@ -87,11 +87,31 @@ function htmlToText (html) {
  
 // The alias the email was actually delivered to. Delivered-To is more accurate than
 // the To: header when the app sends to several recipients or uses BCC.
+// Pull a bare email address out of whatever shape a field arrives in:
+// a string ("Name <a@b.c>" or "a@b.c"), an object ({ email, name }), or an array of either.
+function emailFrom (value) {
+  if (!value) return null
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const found = emailFrom(v)
+      if (found) return found
+    }
+    return null
+  }
+  if (typeof value === 'object') {
+    return emailFrom(value.email || value.address || value.value)
+  }
+  const match = String(value).match(/[^\s<>"',;]+@[^\s<>"',;]+/)
+  return match ? match[0] : null
+}
+ 
 function recipientOf (p) {
-  let d = p.headers && p.headers['Delivered-To']
-  if (Array.isArray(d)) d = d[0]
-  const to = Array.isArray(p.to) && p.to[0] ? p.to[0].email : null
-  return String(d || to || 'unknown').trim().toLowerCase()
+  const headers = p.headers || {}
+  const rcpt = emailFrom(headers['Delivered-To']) ||
+    emailFrom(headers['X-Original-To']) ||
+    emailFrom(p.to) ||
+    'unknown'
+  return rcpt.trim().toLowerCase()
 }
  
 function buildLokiPayload (p) {
